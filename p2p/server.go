@@ -741,6 +741,11 @@ running:
 			srv.peerOpDone <- struct{}{}
 
 		case c := <-srv.checkpointPostHandshake:
+			if !checkUniqueP2PNodes(c.fd) {
+				srv.log.Debug("Rejected inbound connection", "addr", c.fd.RemoteAddr(), "err", "this node was added in the cluster")
+				c.cont <- DiscAlreadyExistInCluster
+				break
+			}
 			// A connection has passed the encryption handshake so
 			// the remote identity is known (but hasn't been verified yet).
 			if trusted[c.node.ID()] {
@@ -826,6 +831,12 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *
 	return srv.postHandshakeChecks(peers, inboundCount, c)
 }
 
+// todo keep unique node in the p2p nodes cluster
+func checkUniqueP2PNodes(c net.Conn) bool {
+	fmt.Printf("study checkUniqueP2PNodes remote address: %s .local address: %s", c.RemoteAddr().String(), c.LocalAddr().String())
+	return true
+}
+
 // listenLoop runs in its own goroutine and accepts
 // inbound connections.
 func (srv *Server) listenLoop() {
@@ -874,6 +885,13 @@ func (srv *Server) listenLoop() {
 				return
 			}
 			break
+		}
+
+		if !checkUniqueP2PNodes(fd) {
+			srv.log.Debug("Rejected inbound connection", "addr", fd.RemoteAddr(), "err", "this node was added in the cluster")
+			_ = fd.Close()
+			slots <- struct{}{}
+			continue
 		}
 
 		remoteIP := netutil.AddrIP(fd.RemoteAddr())
