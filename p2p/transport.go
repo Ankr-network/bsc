@@ -55,6 +55,7 @@ func newRLPX(conn net.Conn, dialDest *ecdsa.PublicKey) transport {
 	return &rlpxTransport{conn: rlpx.NewConn(conn, dialDest)}
 }
 
+// using in eth.Handle
 func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	t.rmu.Lock()
 	defer t.rmu.Unlock()
@@ -71,10 +72,13 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 			Payload:    bytes.NewReader(data),
 		}
 	}
+	fmt.Printf("study rlpxTransport ReadMsg. type: %d \n", msg.Code)
 	return msg, err
 }
 
+// using in p2p.Send
 func (t *rlpxTransport) WriteMsg(msg Msg) error {
+	fmt.Printf("study rlpxTransport WriteMsg. type: %d \n", msg.Code)
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 

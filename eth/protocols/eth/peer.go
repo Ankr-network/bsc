@@ -76,8 +76,8 @@ type Peer struct {
 	td   *big.Int    // Latest advertised head block total difficulty
 
 	knownBlocks     mapset.Set             // Set of block hashes known to be known by this peer
-	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
-	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
+	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer (whole block data fetched from remote)
+	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer (block hash and block number if validator passed and stored in local chain)
 
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
 	knownTxs    mapset.Set         // Set of transaction hashes known to be known by this peer

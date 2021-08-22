@@ -211,9 +211,9 @@ type peerDrop struct {
 type connFlag int32
 
 const (
-	dynDialedConn connFlag = 1 << iota
+	dynDialedConn connFlag = 1 << iota // candidate nodes of protocols and nodes which found by discover (maybe includes boostrap nodes)
 	staticDialedConn
-	inboundConn
+	inboundConn // nodes which connected from listener
 	trustedConn
 )
 
@@ -456,6 +456,7 @@ func (srv *Server) Start() (err error) {
 	if srv.PrivateKey == nil {
 		return errors.New("Server.PrivateKey must be set to a non-nil key")
 	}
+	// this transport is used to do input/output operation from peer
 	if srv.newTransport == nil {
 		srv.newTransport = newRLPX
 	}
@@ -538,6 +539,7 @@ func (srv *Server) setupDiscovery() error {
 
 	// Add protocol-specific discovery sources.
 	added := make(map[string]bool)
+	// for now just light ethereum/eth/snap protocols have dailCandidates
 	for _, proto := range srv.Protocols {
 		if proto.DialCandidates != nil && !added[proto.Name] {
 			srv.discmix.AddSource(proto.DialCandidates)
@@ -741,10 +743,13 @@ running:
 			srv.peerOpDone <- struct{}{}
 
 		case c := <-srv.checkpointPostHandshake:
-			if !checkUniqueP2PNodes(c.fd) {
-				srv.log.Debug("Rejected inbound connection", "addr", c.fd.RemoteAddr(), "err", "this node was added in the cluster")
-				c.cont <- DiscAlreadyExistInCluster
-				break
+			addr, ok := c.fd.RemoteAddr().(*net.TCPAddr)
+			if ok {
+				if !srv.checkUniqueP2PNodes(addr.IP, c.flags) {
+					srv.log.Debug("Rejected inbound connection", "addr", c.fd.RemoteAddr(), "err", "this node was added in the cluster")
+					c.cont <- DiscAlreadyExistInCluster
+					break
+				}
 			}
 			// A connection has passed the encryption handshake so
 			// the remote identity is known (but hasn't been verified yet).
@@ -761,6 +766,7 @@ running:
 			err := srv.addPeerChecks(peers, inboundCount, c)
 			if err == nil {
 				// The handshakes are done and it passed all checks.
+				// Will propagate/broadcast blocks and transactions which fetched from other peers this function "broadcastBlock"
 				p := srv.launchPeer(c)
 				peers[c.node.ID()] = p
 				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
@@ -806,6 +812,7 @@ running:
 	}
 }
 
+// max peers doesn't limit trusted conn
 func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	switch {
 	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
@@ -832,8 +839,27 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *
 }
 
 // todo keep unique node in the p2p nodes cluster
-func checkUniqueP2PNodes(c net.Conn) bool {
-	fmt.Printf("study checkUniqueP2PNodes remote address: %s .local address: %s", c.RemoteAddr().String(), c.LocalAddr().String())
+func (srv *Server) checkUniqueP2PNodes(ip net.IP, f connFlag) bool {
+	fmt.Printf("study checkUniqueP2PNodes ip address: %s flag: %s \n-----\n", ip.String(), f.String())
+	switch f {
+	case inboundConn:
+		// todo check whether it's  unique
+	case dynDialedConn:
+		for _, node := range srv.Config.BootstrapNodes {
+			if nodeAddr(node).(*net.TCPAddr).IP.Equal(ip) {
+				fmt.Println("study checkUniqueP2PNodes BootstrapNodes")
+				return true
+			}
+		}
+		for _, node := range srv.Config.BootstrapNodesV5 {
+			if nodeAddr(node).(*net.TCPAddr).IP.Equal(ip) {
+				fmt.Println("study checkUniqueP2PNodes BootstrapNodesV5")
+				return true
+			}
+		}
+		// todo check whether it's  unique
+	}
+
 	return true
 }
 
@@ -887,13 +913,6 @@ func (srv *Server) listenLoop() {
 			break
 		}
 
-		if !checkUniqueP2PNodes(fd) {
-			srv.log.Debug("Rejected inbound connection", "addr", fd.RemoteAddr(), "err", "this node was added in the cluster")
-			_ = fd.Close()
-			slots <- struct{}{}
-			continue
-		}
-
 		remoteIP := netutil.AddrIP(fd.RemoteAddr())
 		if err := srv.checkInboundConn(remoteIP); err != nil {
 			srv.log.Debug("Rejected inbound connection", "addr", fd.RemoteAddr(), "err", err)
@@ -919,6 +938,9 @@ func (srv *Server) listenLoop() {
 func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	if remoteIP == nil {
 		return nil
+	}
+	if !srv.checkUniqueP2PNodes(remoteIP, inboundConn) {
+		return errors.New("this node was added in the cluster")
 	}
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {

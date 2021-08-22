@@ -18,6 +18,7 @@ package les
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -52,6 +53,7 @@ type ethBackend interface {
 	TxPool() *core.TxPool
 }
 
+// provide ability to request data from network https://github.com/ethereum/devp2p/blob/master/caps/les.md
 type LesServer struct {
 	lesCommons
 
@@ -77,6 +79,7 @@ type LesServer struct {
 }
 
 func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*LesServer, error) {
+	fmt.Println("study", "NewLesServer")
 	lesDb, err := node.OpenDatabase("les.server", 0, 0, "eth/db/lesserver/", false)
 	if err != nil {
 		return nil, err
