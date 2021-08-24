@@ -19,6 +19,7 @@ package p2p
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -198,6 +200,8 @@ type Server struct {
 
 	// State of run loop and listenLoop.
 	inboundHistory expHeap
+
+	redisClient *redis.Client
 }
 
 type peerOpFunc func(map[enode.ID]*Peer)
@@ -451,6 +455,10 @@ func (srv *Server) Start() (err error) {
 	if srv.NoDial && srv.ListenAddr == "" {
 		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
 	}
+
+	srv.redisClient = redis.NewClient(&redis.Options{
+		Addr: "127.0.0.1:6379",
+	})
 
 	// static fields
 	if srv.PrivateKey == nil {
@@ -843,7 +851,8 @@ func (srv *Server) checkUniqueP2PNodes(ip net.IP, f connFlag) bool {
 	fmt.Printf("study checkUniqueP2PNodes ip address: %s flag: %s \n-----\n", ip.String(), f.String())
 	switch f {
 	case inboundConn:
-		// todo check whether it's  unique
+		//  check whether it's  unique
+		return srv.checkIPFromRedis(ip)
 	case dynDialedConn:
 		for _, node := range srv.Config.BootstrapNodes {
 			if nodeAddr(node).(*net.TCPAddr).IP.Equal(ip) {
@@ -857,10 +866,22 @@ func (srv *Server) checkUniqueP2PNodes(ip net.IP, f connFlag) bool {
 				return true
 			}
 		}
-		// todo check whether it's  unique
+		//  check whether it's unique
+		return srv.checkIPFromRedis(ip)
 	}
 
 	return true
+}
+
+func (srv *Server) checkIPFromRedis(ip net.IP) bool {
+	if srv.redisClient.Get(context.Background(), "/p2pNodeIp/"+ip.To4().String()).Err() != nil {
+		return true
+	}
+	return false
+}
+
+func (srv *Server) storeIPToRedis(ip net.IP) {
+	srv.redisClient.Set(context.Background(), "/p2pNodeIp/"+ip.To4().String(), ip.String(), 0)
 }
 
 // listenLoop runs in its own goroutine and accepts
