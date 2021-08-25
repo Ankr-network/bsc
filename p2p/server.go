@@ -457,7 +457,7 @@ func (srv *Server) Start() (err error) {
 	}
 
 	srv.redisClient = redis.NewClient(&redis.Options{
-		Addr: "127.0.0.1:6379",
+		Addr: "192.168.1.91:6379",
 	})
 
 	// static fields
@@ -751,14 +751,19 @@ running:
 			srv.peerOpDone <- struct{}{}
 
 		case c := <-srv.checkpointPostHandshake:
-			addr, ok := c.fd.RemoteAddr().(*net.TCPAddr)
+			local, ok := c.fd.LocalAddr().(*net.TCPAddr)
+			var addr *net.TCPAddr
 			if ok {
-				if !srv.checkUniqueP2PNodes(addr.IP, c.flags) {
-					srv.log.Debug("Rejected inbound connection", "addr", c.fd.RemoteAddr(), "err", "this node was added in the cluster")
-					c.cont <- DiscAlreadyExistInCluster
-					break
+				addr, ok = c.fd.RemoteAddr().(*net.TCPAddr)
+				if ok {
+					if !srv.checkUniqueP2PNodes(addr.IP, local.IP, c.flags) {
+						srv.log.Debug("Rejected inbound connection", "addr", c.fd.RemoteAddr(), "err", "this node was added in the cluster")
+						c.cont <- DiscAlreadyExistInCluster
+						break
+					}
 				}
 			}
+
 			// A connection has passed the encryption handshake so
 			// the remote identity is known (but hasn't been verified yet).
 			if trusted[c.node.ID()] {
@@ -766,11 +771,25 @@ running:
 				c.flags |= trustedConn
 			}
 			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
+			// store 10s in case this node can't pass the peer check
+			srv.storeIPToRedis(addr.IP, local.IP, 10*time.Second)
 			c.cont <- srv.postHandshakeChecks(peers, inboundCount, c)
 
 		case c := <-srv.checkpointAddPeer:
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
+			local, ok := c.fd.LocalAddr().(*net.TCPAddr)
+			var addr *net.TCPAddr
+			if ok {
+				addr, ok = c.fd.RemoteAddr().(*net.TCPAddr)
+				if ok {
+					if !srv.checkUniqueP2PNodes(addr.IP, local.IP, c.flags) {
+						srv.log.Debug("Rejected inbound peer", "addr", c.fd.RemoteAddr(), "err", "this node was added in the cluster")
+						c.cont <- DiscAlreadyExistInCluster
+						break
+					}
+				}
+			}
 			err := srv.addPeerChecks(peers, inboundCount, c)
 			if err == nil {
 				// The handshakes are done and it passed all checks.
@@ -782,6 +801,9 @@ running:
 				if p.Inbound() {
 					inboundCount++
 				}
+
+				// added as a peer so store this permanently
+				srv.storeIPToRedis(addr.IP, local.IP, 0)
 			}
 			c.cont <- err
 
@@ -847,41 +869,50 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *
 }
 
 // todo keep unique node in the p2p nodes cluster
-func (srv *Server) checkUniqueP2PNodes(ip net.IP, f connFlag) bool {
-	fmt.Printf("study checkUniqueP2PNodes ip address: %s flag: %s \n-----\n", ip.String(), f.String())
+func (srv *Server) checkUniqueP2PNodes(remote, local net.IP, f connFlag) bool {
+	fmt.Printf("study checkUniqueP2PNodes remote address: %s flag: %s \n-----\n", remote.String(), f.String())
 	switch f {
 	case inboundConn:
 		//  check whether it's  unique
-		return srv.checkIPFromRedis(ip)
+		return srv.checkIPFromRedis(remote, local)
 	case dynDialedConn:
 		for _, node := range srv.Config.BootstrapNodes {
-			if nodeAddr(node).(*net.TCPAddr).IP.Equal(ip) {
+			if nodeAddr(node).(*net.TCPAddr).IP.Equal(remote) {
 				fmt.Println("study checkUniqueP2PNodes BootstrapNodes")
 				return true
 			}
 		}
 		for _, node := range srv.Config.BootstrapNodesV5 {
-			if nodeAddr(node).(*net.TCPAddr).IP.Equal(ip) {
+			if nodeAddr(node).(*net.TCPAddr).IP.Equal(remote) {
 				fmt.Println("study checkUniqueP2PNodes BootstrapNodesV5")
 				return true
 			}
 		}
 		//  check whether it's unique
-		return srv.checkIPFromRedis(ip)
+		return srv.checkIPFromRedis(remote, local)
 	}
 
 	return true
 }
 
-func (srv *Server) checkIPFromRedis(ip net.IP) bool {
-	if srv.redisClient.Get(context.Background(), "/p2pNodeIp/"+ip.To4().String()).Err() != nil {
+func (srv *Server) checkIPFromRedis(remote, local net.IP) bool {
+	result, err := srv.redisClient.Get(context.Background(), "/p2pNodeIp/"+remote.To4().String()).Result()
+	if err != nil {
 		return true
 	}
+
+	if result == local.To4().String() {
+		return true
+	}
+
 	return false
 }
 
-func (srv *Server) storeIPToRedis(ip net.IP) {
-	srv.redisClient.Set(context.Background(), "/p2pNodeIp/"+ip.To4().String(), ip.String(), 0)
+func (srv *Server) storeIPToRedis(remote, local net.IP, duration time.Duration) {
+	fmt.Println("study storeIPToRedis", remote.To4().String(), local.To4().String())
+	if err := srv.redisClient.Set(context.Background(), "/p2pNodeIp/"+remote.To4().String(), local.To4().String(), duration).Err(); err != nil {
+		srv.log.Error("store IP to Redis", "err", err)
+	}
 }
 
 // listenLoop runs in its own goroutine and accepts
@@ -959,9 +990,6 @@ func (srv *Server) listenLoop() {
 func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	if remoteIP == nil {
 		return nil
-	}
-	if !srv.checkUniqueP2PNodes(remoteIP, inboundConn) {
-		return errors.New("this node was added in the cluster")
 	}
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
