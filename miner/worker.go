@@ -1150,12 +1150,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
 		noBundles = false
 	}
-	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && noBundles {
-		w.updateSnapshot()
-		return
-	}
-
-	if len(pending) != 0 {
+	// TODO check
+	if len(pending) != 0 || !noBundles {
 		start := time.Now()
 		// Split the pending transactions into locals and remotes
 		localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
