@@ -1146,12 +1146,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 	}
 	// Short circuit if there is no available pending transactions or bundles.
-	noBundles := true
-	if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
-		noBundles = false
-	}
+	// noBundles := true
+	// if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
+	// 	noBundles = false
+	// }
 	// TODO check
-	if len(pending) != 0 || !noBundles {
+	if len(pending) != 0 {
 		start := time.Now()
 		// Split the pending transactions into locals and remotes
 		localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
