@@ -1146,10 +1146,14 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 	}
 	// Short circuit if there is no available pending transactions or bundles.
-	// noBundles := true
-	// if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
-	// 	noBundles = false
-	// }
+	noBundles := true
+	if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
+		noBundles = false
+	}
+	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && noBundles {
+		w.commit(uncles, w.fullTaskHook, false, tstart)
+		return
+	}
 	// TODO check
 	if len(pending) != 0 {
 		start := time.Now()
@@ -1180,7 +1184,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			if w.commitBundle(bundleTxs, w.coinbase, interrupt) {
 				return
 			}
-			w.current.profit.Add(w.current.profit, bundle.totalEth)
+			// w.current.profit.Add(w.current.profit, bundle.totalEth)
 		}
 
 		if len(localTxs) > 0 {
