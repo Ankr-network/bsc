@@ -8,8 +8,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          token: ${{ secrets.REPO_SCOPED_TOKEN }}
-          ref: 'feature/full-block-api'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'upstream'
       - name: Fetch release version
         run: |
           curl -sL https://api.github.com/repos/binance-chain/bsc/releases/latest | \
@@ -20,7 +20,9 @@ jobs:
       - name: Commit latest release version
         if: steps.git-check.outputs.modified == 'true'
         run: |
+          git remote add upstream https://github.com/binance-chain/bsc.git
+          git pull upstream `cat release-trigger/latest.txt`
           git config --global user.name 'Github Actions'
           git config --global user.email ''
           git commit -am "`cat release-trigger/latest.txt` released"
-          git push origin feature/full-block-api
+          git push origin upstream
