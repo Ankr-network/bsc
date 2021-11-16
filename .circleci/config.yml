@@ -46,6 +46,7 @@ patch-full-block-api-template: &patch-full-block-api-template
   docker:
     - image: alpine/git:latest
   steps:
+    - checkout
     - setup_remote_docker:
         docker_layer_caching: true
     - attach_workspace:
