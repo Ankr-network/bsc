@@ -1,0 +1,55 @@
+
+version: 2.1
+
+environment-template: &environment-template
+  UPSTREAM_GITHUB_REPO: binance-chain/bsc
+  UPSTREAM_BRANCH: upstream
+
+merge-release-template: &merge-release-template
+  working_directory: /build
+  docker:
+    - image: mohamnag/ubuntu-git:latest
+  steps:
+    - checkout
+    - setup_remote_docker:
+        docker_layer_caching: true
+    - attach_workspace:
+        at: '.'
+    - run:
+        name: Merge lastest version
+        environment:
+          <<: *environment-template
+        command: |
+          git config --global user.name 'Github Actions'
+          git config --global user.email 'xozzslip@gmail.com'
+          VERSION=$(curl -sL https://api.github.com/repos/binance-chain/bsc/releases/latest | jq -r ".tag_name" > release-trigger/latest.txt)
+          git remote add remote-upstream https://github.com/binance-chain/bsc.git
+          git fetch remote-upstream --tags
+          git merge $VERSION --no-commit --allow-unrelated-histories
+          git add .
+          git commit -m "$VERSION released"
+          git push origin upstream
+    - persist_to_workspace:
+        root: '.'
+        paths:
+          - '.'
+
+
+jobs:
+  merge-release:
+    environment:
+      CONTEXT_PATH: ./
+    <<: *merge-release-template
+
+workflows:
+  version: 2
+  nightly:
+    triggers:
+      - schedule:
+          cron: "* * * * *"
+          filters:
+            branches:
+              only:
+                - upstream
+    jobs:
+      - merge-release
