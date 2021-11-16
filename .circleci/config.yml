@@ -8,7 +8,7 @@ environment-template: &environment-template
 merge-release-template: &merge-release-template
   working_directory: /build
   docker:
-    - image: mohamnag/ubuntu-git:latest
+    - image: alpine/git:latest
   steps:
     - checkout
     - setup_remote_docker:
@@ -20,6 +20,7 @@ merge-release-template: &merge-release-template
         environment:
           <<: *environment-template
         command: |
+          apk add jq
           git config --global user.name 'Github Actions'
           git config --global user.email 'xozzslip@gmail.com'
           VERSION=$(curl -sL https://api.github.com/repos/binance-chain/bsc/releases/latest | jq -r ".tag_name" > release-trigger/latest.txt)
