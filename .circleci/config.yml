@@ -41,21 +41,60 @@ merge-release-template: &merge-release-template
           - '.'
 
 
+patch-full-block-api-template: &patch-full-block-api-template
+  working_directory: /build
+  docker:
+    - image: alpine/git:latest
+  steps:
+    - checkout
+    - setup_remote_docker:
+        docker_layer_caching: true
+    - attach_workspace:
+        at: '.'
+    - run:
+        name: Merge lastest upstream version to patch branch
+        environment:
+          <<: *environment-template
+        command: |
+          git merge upstream --no-commit --allow-unrelated-histories
+          echo "merged successfully"
+          if ! [ -z "`git status --porcelain`" ]; then
+            git add .
+            git commit -m "$VERSION released"
+            git push origin upstream
+          fi
+    - persist_to_workspace:
+        root: '.'
+        paths:
+          - '.'
+
 jobs:
   merge-release:
     environment:
       CONTEXT_PATH: ./
     <<: *merge-release-template
+  patch-full-block-api:
+    environment:
+      CONTEXT_PATH: ./
+    <<: *patch-full-block-api-template
 
 workflows:
   version: 2
-  nightly:
+  periodic-release-check:
     triggers:
       - schedule:
-          cron: "*/30 * * * *"
+          cron: "* * * * *"
           filters:
             branches:
               only:
                 - upstream
     jobs:
       - merge-release
+  build:
+    jobs:
+      - patch-full-block-api:
+          filters:
+            branches:
+              only:
+              - upstream
+              - feature/full-block-api
