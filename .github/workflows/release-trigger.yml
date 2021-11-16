@@ -21,7 +21,7 @@ jobs:
         if: steps.git-check.outputs.modified == 'true'
         run: |
           git remote add remote-upstream https://github.com/binance-chain/bsc.git
-          get fetch remote-upstream --tags
+          git fetch remote-upstream --tags
           git merge `cat release-trigger/latest.txt`
           git add .
           git config --global user.name 'Github Actions'
