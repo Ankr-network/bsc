@@ -46,7 +46,6 @@ patch-full-block-api-template: &patch-full-block-api-template
   docker:
     - image: alpine/git:latest
   steps:
-    - checkout
     - setup_remote_docker:
         docker_layer_caching: true
     - attach_workspace:
@@ -56,12 +55,14 @@ patch-full-block-api-template: &patch-full-block-api-template
         environment:
           <<: *environment-template
         command: |
+          git checkout upstream
+          git checkout feature/full-block-api
           git merge upstream --no-commit --allow-unrelated-histories
           echo "merged successfully"
           if ! [ -z "`git status --porcelain`" ]; then
             git add .
             git commit -m "$VERSION released"
-            git push origin upstream
+            git push origin feature/full-block-api
           fi
     - persist_to_workspace:
         root: '.'
@@ -96,5 +97,5 @@ workflows:
           filters:
             branches:
               only:
-              - upstream
               - feature/full-block-api
+              - upstream
