@@ -56,6 +56,8 @@ patch-full-block-api-template: &patch-full-block-api-template
         environment:
           <<: *environment-template
         command: |
+          git config --global user.name 'Github Actions'
+          git config --global user.email 'xozzslip@gmail.com'
           git checkout upstream
           git checkout feature/full-block-api
           git merge upstream --no-commit --allow-unrelated-histories
