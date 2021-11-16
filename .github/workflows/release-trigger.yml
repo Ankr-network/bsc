@@ -25,6 +25,6 @@ jobs:
           git merge `cat release-trigger/latest.txt` --no-commit --allow-unrelated-histories
           git add .
           git config --global user.name 'Github Actions'
-          git config --global user.email ''
+          git config --global user.email 'xozzslip@gmail.com'
           git commit -m "`cat release-trigger/latest.txt` released"
           git push origin upstream
