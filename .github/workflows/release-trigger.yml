@@ -20,9 +20,11 @@ jobs:
       - name: Commit latest release version
         if: steps.git-check.outputs.modified == 'true'
         run: |
-          git remote add upstream https://github.com/binance-chain/bsc.git
-          git pull upstream `cat release-trigger/latest.txt`
+          git remote add remote-upstream https://github.com/binance-chain/bsc.git
+          get fetch remote-upstream --tags
+          git merge `cat release-trigger/latest.txt`
+          git add .
           git config --global user.name 'Github Actions'
           git config --global user.email ''
-          git commit -am "`cat release-trigger/latest.txt` released"
+          git commit -m "`cat release-trigger/latest.txt` released"
           git push origin upstream
