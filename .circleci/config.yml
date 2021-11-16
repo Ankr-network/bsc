@@ -24,10 +24,12 @@ merge-release-template: &merge-release-template
           apk add curl
           git config --global user.name 'Github Actions'
           git config --global user.email 'xozzslip@gmail.com'
-          VERSION=$(curl -sL https://api.github.com/repos/binance-chain/bsc/releases/latest | jq -r ".tag_name" > release-trigger/latest.txt)
+          VERSION=$(curl -sL https://api.github.com/repos/binance-chain/bsc/releases/latest | jq -r ".tag_name")
           git remote add remote-upstream https://github.com/binance-chain/bsc.git
           git fetch remote-upstream --tags
+          echo "goint to merge with $VERSION"
           git merge $VERSION --no-commit --allow-unrelated-histories
+          echo "merged successfully"
           git add .
           git commit -m "$VERSION released"
           git push origin upstream
