@@ -30,9 +30,11 @@ merge-release-template: &merge-release-template
           echo "goint to merge with $VERSION"
           git merge $VERSION --no-commit --allow-unrelated-histories
           echo "merged successfully"
-          git add .
-          git commit -m "$VERSION released"
-          git push origin upstream
+          if ! [ -z "`git status --porcelain`" ]; then
+            git add .
+            git commit -m "$VERSION released"
+            git push origin upstream
+          fi
     - persist_to_workspace:
         root: '.'
         paths:
@@ -50,7 +52,7 @@ workflows:
   nightly:
     triggers:
       - schedule:
-          cron: "* * * * *"
+          cron: "*/30 * * * *"
           filters:
             branches:
               only:
