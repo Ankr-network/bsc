@@ -87,7 +87,7 @@ workflows:
   periodic-release-check:
     triggers:
       - schedule:
-          cron: "*/30 * * * *"
+          cron: "0,30 * * * *"
           filters:
             branches:
               only:
