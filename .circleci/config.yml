@@ -64,7 +64,7 @@ patch-full-block-api-template: &patch-full-block-api-template
           echo "merged successfully"
           if ! [ -z "`git status --porcelain`" ]; then
             git add .
-            git commit -m "$VERSION released"
+            git commit -m "merged with upstream"
             git push origin feature/full-block-api
           fi
     - persist_to_workspace:
