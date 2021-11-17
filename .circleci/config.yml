@@ -1,104 +1,37 @@
-
 version: 2.1
 
-environment-template: &environment-template
-  UPSTREAM_GITHUB_REPO: binance-chain/bsc
-  UPSTREAM_BRANCH: upstream
-
-merge-release-template: &merge-release-template
-  working_directory: /build
-  docker:
-    - image: alpine/git:latest
-  steps:
-    - checkout
-    - setup_remote_docker:
-        docker_layer_caching: true
-    - attach_workspace:
-        at: '.'
-    - run:
-        name: Merge lastest version
-        environment:
-          <<: *environment-template
-        command: |
-          apk add jq
-          apk add curl
-          git config --global user.name 'Github Actions'
-          git config --global user.email 'xozzslip@gmail.com'
-          VERSION=$(curl -sL https://api.github.com/repos/binance-chain/bsc/releases/latest | jq -r ".tag_name")
-          git remote add remote-upstream https://github.com/binance-chain/bsc.git
-          git fetch remote-upstream --tags
-          echo "goint to merge with $VERSION"
-          git merge $VERSION --no-commit --allow-unrelated-histories
-          echo "merged successfully"
-          if ! [ -z "`git status --porcelain`" ]; then
-            git add .
-            git commit -m "$VERSION released"
-            git push origin upstream
-          fi
-    - persist_to_workspace:
-        root: '.'
-        paths:
-          - '.'
-
-
-patch-full-block-api-template: &patch-full-block-api-template
-  working_directory: /build
-  docker:
-    - image: alpine/git:latest
-  steps:
-    - checkout
-    - setup_remote_docker:
-        docker_layer_caching: true
-    - attach_workspace:
-        at: '.'
-    - run:
-        name: Merge lastest upstream version to patch branch
-        environment:
-          <<: *environment-template
-        command: |
-          git config --global user.name 'Github Actions'
-          git config --global user.email 'xozzslip@gmail.com'
-          git checkout upstream
-          git checkout feature/full-block-api
-          git merge upstream --no-commit --allow-unrelated-histories
-          echo "merged successfully"
-          if ! [ -z "`git status --porcelain`" ]; then
-            git add .
-            git commit -m "merged with upstream"
-            git push origin feature/full-block-api
-          fi
-    - persist_to_workspace:
-        root: '.'
-        paths:
-          - '.'
+global-variables: &global-variables
+  BLOCKCHAIN_NAME: bsc
 
 jobs:
-  merge-release:
-    environment:
-      CONTEXT_PATH: ./
-    <<: *merge-release-template
-  patch-full-block-api:
-    environment:
-      CONTEXT_PATH: ./
-    <<: *patch-full-block-api-template
+  build-and-upload:
+    working_directory: /build
+    docker:
+      - image: xozzslip/ubuntu-go
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - attach_workspace:
+          at: '.'
+      - run:
+          name: Go Build & Publish
+          environment:
+            <<: *global-variables
+          command: |
+            VERSION=$(git log --decorate --pretty=oneline @ | egrep 'tag: v[A-Za-z0-9\.-]+' -o | cut -d ":" -f2 | head -1 | tr -d '\n')
+            make geth
+            scp ./build/bin/geth root@65.108.15.182:/mnt/chaindata/$BLOCKCHAIN_NAME/bin/geth-$VERSION-$CIRCLE_SHA1
+            cd ..
+      - persist_to_workspace:
+          root: '.'
+          paths:
+            - '.'
 
 workflows:
-  version: 2
-  periodic-release-check:
-    triggers:
-      - schedule:
-          cron: "* * * * *"
-          filters:
-            branches:
-              only:
-                - upstream
-    jobs:
-      - merge-release
   build:
     jobs:
-      - patch-full-block-api:
+      - build-and-upload:
           filters:
             branches:
-              only:
-                - feature/full-block-api
-                - upstream
+              only: feature/full-block-api
