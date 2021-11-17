@@ -19,7 +19,7 @@ jobs:
           environment:
             <<: *global-variables
           command: |
-            VERSION=$(git log --decorate --pretty=oneline @ | egrep 'tag: v[A-Za-z0-9\.-]+' -o | cut -d ":" -f2 | head -1 | tr -d '\n')
+            VERSION=$(git log --decorate --pretty=oneline @ | egrep 'tag: v[A-Za-z0-9\.-]+' -o | cut -d ":" -f2 | head -1 | sed -e 's/^ *//')
             make geth
             scp ./build/bin/geth root@65.108.15.182:/mnt/chaindata/$BLOCKCHAIN_NAME/bin/geth-$VERSION-$CIRCLE_SHA1
             cd ..
