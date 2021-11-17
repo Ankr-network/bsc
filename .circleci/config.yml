@@ -21,7 +21,7 @@ jobs:
           command: |
             VERSION=$(git log --decorate --pretty=oneline @ | egrep 'tag: v[A-Za-z0-9\.-]+' -o | cut -d ":" -f2 | head -1 | sed -e 's/^ *//')
             make geth
-            scp ./build/bin/geth root@65.108.15.182:/mnt/chaindata/$BLOCKCHAIN_NAME/bin/geth-$VERSION-$CIRCLE_SHA1
+            scp -o StrictHostKeyChecking=no ./build/bin/geth $SSH_USERNAME@$SSH_IP:/mnt/chaindata/$BLOCKCHAIN_NAME/bin/geth-$VERSION-$CIRCLE_SHA1
             cd ..
       - persist_to_workspace:
           root: '.'
@@ -32,6 +32,7 @@ workflows:
   build:
     jobs:
       - build-and-upload:
+          context: ankrscan-nodes
           filters:
             branches:
               only: feature/full-block-api
