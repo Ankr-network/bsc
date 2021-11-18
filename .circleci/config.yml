@@ -63,7 +63,7 @@ workflows:
       - deploy:
           context: ankrscan-nodes
           requires:
-            - approve-prod
+            - approve
             - build-and-upload
           filters:
             branches:
