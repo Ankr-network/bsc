@@ -33,7 +33,6 @@ jobs:
     docker:
       - image: xozzslip/ubuntu-go
     steps:
-      - checkout
       - setup_remote_docker
       - run:
           name: Deploy
@@ -46,6 +45,7 @@ jobs:
             SERVICE_PATH=/etc/systemd/system/$SERVICE_NAME.service
             ssh -o StrictHostKeyChecking=no -t $SSH_USERNAME@$SSH_IP "sed -Ei 's@ExecStart=[^[:space:]]+@ExecStart=`echo $BINARY_PATH`@g' `echo $SERVICE_PATH`"
             echo "updated service file"
+            ssh -o StrictHostKeyChecking=no -t $SSH_USERNAME@$SSH_IP "systemctl daemon-reload && systemctl stop `echo $SERVICE_NAME` && systemctl start `echo $SERVICE_NAME`"
 
 workflows:
   build:
