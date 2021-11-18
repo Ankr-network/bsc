@@ -1,7 +1,8 @@
 version: 2.1
 
 global-variables: &global-variables
-  BLOCKCHAIN_NAME: bsc
+  SERVICE_NAME: bsc
+  BINARY_DIR: /mnt/chaindata/bsc/bin/
 
 jobs:
   build-and-upload:
@@ -19,20 +20,51 @@ jobs:
           environment:
             <<: *global-variables
           command: |
-            VERSION=$(git log --decorate --pretty=oneline @ | egrep 'tag: v[A-Za-z0-9\.-]+' -o | cut -d ":" -f2 | head -1 | sed -e 's/^ *//')
+            VERSION=$(git log --decorate --pretty=oneline @ | egrep 'v[0-9\.]+[A-Za-z0-9\.-]*' -o | cut -d ":" -f2 | head -1 | sed -e 's/^ *//')
             make geth
-            scp -o StrictHostKeyChecking=no ./build/bin/geth $SSH_USERNAME@$SSH_IP:/mnt/chaindata/$BLOCKCHAIN_NAME/bin/geth-$VERSION-$CIRCLE_SHA1
+            scp -o StrictHostKeyChecking=no ./build/bin/geth $SSH_USERNAME@$SSH_IP:$BINARY_DIR/geth-$VERSION-$CIRCLE_SHA1
             cd ..
       - persist_to_workspace:
           root: '.'
           paths:
             - '.'
 
+  deploy:
+    docker:
+      - image: xozzslip/ubuntu-go
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Deploy
+          environment:
+            <<: *global-variables
+          command: |
+            BINARY_NAME=$(ssh -t $SSH_USERNAME@$SSH_IP "ls `echo $BINARY_DIR` | grep `echo $CIRCLE_SHA1` | tr -d '\n'")
+            BINARY_PATH=$(BINARY_DIR)$(BINARY_NAME)
+            echo "going to deploy $BINARY_PATH"
+            SERVICE_PATH=/etc/systemd/system/$(SERVICE_NAME).service
+            ssh -t $SSH_USERNAME@$SSH_IP "sed -Ei 's@ExecStart=[^[:space:]]+@ExecStart=`echo $BINARY_PATH`@g' `echo $SERVICE_PATH`"
+            echo "updated service file"
+
 workflows:
   build:
     jobs:
       - build-and-upload:
           context: ankrscan-nodes
+          filters:
+            branches:
+              only: feature/full-block-api
+      - approve:
+          filters:
+            branches:
+              only: feature/full-block-api
+          type: approval
+      - deploy:
+          context: ankrscan-nodes
+          requires:
+            - approve-prod
+            - build-and-upload
           filters:
             branches:
               only: feature/full-block-api
