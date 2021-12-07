@@ -812,7 +812,7 @@ func (s *PublicBlockChainAPI) getBlockReceipts(ctx context.Context, txByHash map
 			continue
 		}
 		fields := map[string]interface{}{
-			"blockHash":         block.Hash(),
+			"blockHash":         receipt.BlockHash.Hex(),
 			"blockNumber":       "0x" + block.Number().Text(16),
 			"transactionHash":   tx.Hash,
 			"transactionIndex":  tx.TransactionIndex,
